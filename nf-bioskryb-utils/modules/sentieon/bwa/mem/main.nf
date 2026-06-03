@@ -27,8 +27,30 @@ process SENTIEON_BWA_MEM {
     fi
 
     export bwt_max_mem=$memory
- 
-    sentieon bwa mem -M -Y -K 10000000 -R "@RG\\tID:${sample_name}\\tSM:${sample_name}\\tPL:Illumina" -t $task.cpus '${fasta_ref}/genome.fa' '${reads[0]}' '${reads[1]}' | sentieon util sort -r '${fasta_ref}/genome.fa' -o '${sample_name}_sorted.bam' -t $task.cpus --sam2bam -i -
+
+    # Run Sentieon BWA first and write SAM to disk.
+    # This avoids running two Sentieon commands concurrently in a pipe.
+    sentieon bwa mem \\
+        -M \\
+        -Y \\
+        -K 10000000 \\
+        -R "@RG\\tID:${sample_name}\\tSM:${sample_name}\\tPL:Illumina" \\
+        -t $task.cpus \\
+        '${fasta_ref}/genome.fa' \\
+        '${reads[0]}' \\
+        '${reads[1]}' \\
+        > '${sample_name}.sam'
+
+    # Then run Sentieon sort after BWA has fully exited.
+    sentieon util sort \\
+        -r '${fasta_ref}/genome.fa' \\
+        -o '${sample_name}_sorted.bam' \\
+        -t $task.cpus \\
+        --sam2bam \\
+        -i '${sample_name}.sam'
+
+    rm -f '${sample_name}.sam' 
+
     export SENTIEON_VER="202308.01"
     echo Sentieon: \$SENTIEON_VER > sentieon_bwa_mem_version.yml
 
