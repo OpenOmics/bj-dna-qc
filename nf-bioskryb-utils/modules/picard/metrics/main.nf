@@ -59,7 +59,7 @@ process PICARD_METRICS {
         touch ${sample_name}.wgsmetricsalgo.metrics.txt
 
         export GATK4_VER=\$(echo \$(gatk --version 2>&1) | sed -e 's/.*(GATK) //; s/Version: //g')
-        echo GATK4: \$GATK4_VER > gatk4_qcmetrics_version.yml
+        echo GATK4: \$GATK4_VER > gatk4_version.yml
         """
     } else if (mode == 'wgs') {
         """
@@ -102,7 +102,7 @@ process PICARD_METRICS {
         touch ${sample_name}.${type}.hsmetricalgo.metrics.txt
         
         export GATK4_VER=\$(echo \$(gatk --version 2>&1) | sed -e 's/.*(GATK) //; s/Version: //g')
-        echo GATK4: \$GATK4_VER > gatk4_qcmetrics_version.yml
+        echo GATK4: \$GATK4_VER > gatk4_version.yml
         """
     } else {
         
@@ -144,7 +144,7 @@ process PICARD_METRICS {
             --INTERVALS ${base_metrics_intervals}.interval_list
 
         export GATK4_VER=\$(echo \$(gatk --version 2>&1) | sed -e 's/.*(GATK) //; s/Version: //g')
-        echo GATK4: \$GATK4_VER > gatk4_qcmetrics_version.yml
+        echo GATK4: \$GATK4_VER > gatk4_version.yml
         """
     }
 }

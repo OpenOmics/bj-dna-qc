@@ -203,9 +203,6 @@ workflow PRESEQ_WF {
             ch_align_dedup_qc_version = ALIGN_DEDUP_QC_STANDARD.out.version
 
         }
-
-        ch_align_dedup_qc_version.view()
-
         
         ch_dedup_bam
             .collectFile( name: "bam_files.txt", newLine: true, sort: { it[0] }, storeDir: "${ch_tmp_dir}" )
@@ -261,7 +258,6 @@ workflow PRESEQ_WF {
                                                     )
                                     )
                                 )
-        combine_outputs_b.view()
      
         
         
@@ -330,11 +326,11 @@ workflow PRESEQ_WF {
                             ch_publish_dir,
                             ch_enable_publish
                         )
-        
+
         ch_tool_versions = SEQTK_WF.out.version.take(1).ifEmpty([])
                             .combine(FastpNoQCWF.out.version.take(1))
                             .combine(ch_fastqc_version.take(1).ifEmpty([]))
-                            .combine(ch_align_dedup_qc_version)
+                            .combine(ch_align_dedup_qc_version.collect())
                             .combine(ch_qualimap_version.take(1).ifEmpty([]) )
                             .combine(PRESEQ_SUBWF.out.preseqBam2mr_version.take(1))
                             .combine(PRESEQ_SUBWF.out.preseqExtrap_version.take(1))
