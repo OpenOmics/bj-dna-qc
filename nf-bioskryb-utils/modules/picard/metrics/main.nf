@@ -17,10 +17,10 @@ process PICARD_METRICS {
 
 
     output:
-    tuple val(sample_name), file("*metrics.txt*"), emit: metrics_tuple
-    path "*metrics.txt*", emit: metrics
+    tuple val(sample_name), file("*metrics*"), emit: metrics_tuple
+    path "*metrics*", emit: metrics
     tuple val(sample_name), file("*.${type}.alignmentstat_metrics.txt"), emit: alignment_metrics
-    path("gatk4_qcmetrics_version.yml"), emit: version
+    path("gatk4_version.yml"), emit: version
     
     script:
     def bqsr = recal_table_file.name == "dummy_file.txt" ? "" : "--bqsr-recal-file ${recal_table_file}"

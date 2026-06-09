@@ -23,7 +23,7 @@ process CUSTOM_REPORT {
     
     script:
     """
-    python3 /scripts/custom_report.py -s '*sentieonmetrics.txt' -m '*MAPD' -q '*no_qc_fastp.json' -t '*sample_metadata.json' -l '*lorenzstats.tsv' -i '$read_counts_csv' -r '$min_reads' -o 'Summary'
+    python3 /scripts/custom_report.py -s '*metrics.txt' -m '*MAPD' -q '*no_qc_fastp.json' -t '*sample_metadata.json' -l '*lorenzstats.tsv' -i '$read_counts_csv' -r '$min_reads' -o 'Summary'
 
 
     echo custom_report: v0.0.1 > custom_report_version.yml

@@ -15,7 +15,7 @@ process CUSTOM_DATA_PROCESSING {
 
     output:
     // tuple val(sample_name), path("*_fastqqc_mqc.txt"), emit: metrics_tuple
-    path "*_all_sentieonmetrics.txt", emit: metrics
+    path "*_all_metrics.txt", emit: metrics
     path("custom_processing_version.yml"), emit: version
 
     script:
@@ -26,14 +26,13 @@ process CUSTOM_DATA_PROCESSING {
     . /opt/sentieon/cloud_auth.sh no-op
 
     
-    cat ${sample_name}.dedup.cov_sentieonmetrics.sample_interval_summary | tail -n+2 | sed 's|:|\t|g' | sed 's|-|\t|g' | cut -f1-4 > ${sample_name}.dedup_chromosome_read_proportions.tsv
+    cat ${sample_name}.dedup.cov_*metrics.sample_interval_summary | tail -n+2 | sed 's|:|\t|g' | sed 's|-|\t|g' | cut -f1-4 > ${sample_name}.dedup_chromosome_read_proportions.tsv
     
-    cat ${sample_name}.nondedup.cov_sentieonmetrics.sample_interval_summary | tail -n+2 | sed 's|:|\t|g' | sed 's|-|\t|g' | cut -f1-4 > ${sample_name}.nondedup_chromosome_read_proportions.tsv
+    cat ${sample_name}.nondedup.cov_*metrics.sample_interval_summary | tail -n+2 | sed 's|:|\t|g' | sed 's|-|\t|g' | cut -f1-4 > ${sample_name}.nondedup_chromosome_read_proportions.tsv
     
-    cat ${sample_name}.dedup.alignmentstat_sentieonmetrics.txt | grep "^PAIR" | cut -f 7 > ${sample_name}_pct_aligned
+    cat ${sample_name}.dedup.alignmentstat_*metrics.txt | grep "^PAIR" | cut -f 7 > ${sample_name}_pct_aligned
     
-    cat ${sample_name}.dedup.alignmentstat_sentieonmetrics.txt | grep "^PAIR" | cut -f 6 > ${sample_name}_n_pe_trimmed_aligned
-    
+    cat ${sample_name}.dedup.alignmentstat_*metrics.txt | grep "^PAIR" | cut -f 6 > ${sample_name}_n_pe_trimmed_aligned
     
     
     samtools view -F 3854 ${bam} | awk '(\$7 ~ /=/ && \$9 < 10000) {print 1}' |wc -l > ${sample_name}_n_input_phi29_chimeras
@@ -51,18 +50,18 @@ process CUSTOM_DATA_PROCESSING {
     
     
     parse_metrics_files.py \
-      ${sample_name}.dedup.wgsmetricsalgo.sentieonmetrics.txt \
-      ${sample_name}.nondedup.wgsmetricsalgo.sentieonmetrics.txt \
-      ${sample_name}.dedup_sentieonmetrics.txt \
-      ${sample_name}.dedup.alignmentstat_sentieonmetrics.txt \
-      ${sample_name}.nondedup.alignmentstat_sentieonmetrics.txt \
+      ${sample_name}.dedup.wgsmetricsalgo.*metrics.txt \
+      ${sample_name}.nondedup.wgsmetricsalgo.*metrics.txt \
+      ${sample_name}.dedup_*metrics.txt \
+      ${sample_name}.dedup.alignmentstat_*metrics.txt \
+      ${sample_name}.nondedup.alignmentstat_*metrics.txt \
       ${sample_name}.dedup_chromosome_read_proportions.tsv \
       ${sample_name}.nondedup_chromosome_read_proportions.tsv \
       ${sample_name}_pct_aligned \
-      ${sample_name}.dedup.gcbias_summary.sentieonmetrics.txt \
-      ${sample_name}.nondedup.gcbias_summary.sentieonmetrics.txt \
-      ${sample_name}.dedup.insertsizemetricalgo.sentieonmetrics.txt \
-      ${sample_name}.nondedup.insertsizemetricalgo.sentieonmetrics.txt \
+      ${sample_name}.dedup.gcbias_summary.*metrics.txt \
+      ${sample_name}.nondedup.gcbias_summary.*metrics.txt \
+      ${sample_name}.dedup.insertsizemetricalgo.*metrics.txt \
+      ${sample_name}.nondedup.insertsizemetricalgo.*metrics.txt \
       \$PRESEQ_COUNT \
       \$PRESEQ_COUNT_NONDEDUP \
       ${sample_name} \
@@ -70,7 +69,7 @@ process CUSTOM_DATA_PROCESSING {
       \$PHI29_CHIMERAS \
       \$PRESEQ_TOTAL
       
-    mv ${sample_name}_all_metrics.tsv ${sample_name}_all_sentieonmetrics.txt
+    mv ${sample_name}_all_metrics.tsv ${sample_name}_all_metrics.txt
 
     echo custom_processing: v0.0.1 > custom_version.yml
     export SAMTOOLS_VER=\$(samtools --version 2>&1 |  sed -n -e '1p' | grep -Eo [0-9][.]*[0-9]*)

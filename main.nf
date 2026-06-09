@@ -80,6 +80,7 @@ workflow {
             params.tmp_dir,
             params.mapd_bin_size,
             params.blacklist_regions,
+            params.run_sentieon,
             params.skip_kraken,
             params.skip_fastqc,
             params.skip_qualimap,

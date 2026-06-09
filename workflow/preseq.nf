@@ -14,12 +14,9 @@ include { CUSTOM_FASTQ_MERGE_WF } from '../nf-bioskryb-utils/modules/bioskryb/cu
 include { FastpNoQCWF; FastpQCWF } from '../nf-bioskryb-utils/modules/fastp/main.nf'
 include { FASTQC } from '../nf-bioskryb-utils/modules/fastqc/main.nf'
 include { SEQTK_WF } from '../nf-bioskryb-utils/modules/seqtk/sample/main.nf'
-include { SENTIEON_BWA_WF } from '../nf-bioskryb-utils/modules/sentieon/bwa/mem/main.nf'
 include { KRAKEN2_WF } from '../nf-bioskryb-utils/modules/kraken2/main.nf'
-include { SENTIEON_DRIVER_LOCUSCOLLECTOR_WF } from '../nf-bioskryb-utils/modules/sentieon/driver/locuscollector/main.nf'
-include { SENTIEON_DRIVER_DEDUP_WF } from '../nf-bioskryb-utils/modules/sentieon/driver/dedup/main.nf'
-include { SENTIEON_DRIVER_METRICS_WF as SENTIEON_DRIVER_METRICS_WITH_DEDUP_WF } from '../nf-bioskryb-utils/modules/sentieon/driver/metrics/main.nf'
-include { SENTIEON_DRIVER_METRICS_WF as SENTIEON_DRIVER_METRICS_WITH_NONDEDUP_WF } from '../nf-bioskryb-utils/modules/sentieon/driver/metrics/main.nf'
+include { ALIGN_DEDUP_QC_SENTIEON } from '../nf-bioskryb-utils/subworkflows/align_dedup_qc/align_dedup_qc_sentieon.nf'
+include { ALIGN_DEDUP_QC_STANDARD } from '../nf-bioskryb-utils/subworkflows/align_dedup_qc/align_dedup_qc_standard.nf'
 include { QUALIMAP_BAMQC_WF } from '../nf-bioskryb-utils/modules/qualimap/bamqc/main.nf'
 include { PRESEQ_SUBWF as PRESEQ_SUBWF} from '../nf-bioskryb-utils/modules/preseq/main.nf'
 include { PRESEQ_SUBWF as PRESEQ_SUBWF_NONDEDUP} from '../nf-bioskryb-utils/modules/preseq/main.nf'
@@ -65,6 +62,7 @@ workflow PRESEQ_WF {
         ch_tmp_dir
         ch_mapd_bin_size
         ch_blacklist_regions
+        ch_run_sentieon
         ch_skip_kraken
         ch_skip_fastqc
         ch_skip_qualimap
@@ -161,64 +159,63 @@ workflow PRESEQ_WF {
             ch_fastqc_report = FASTQC.out.report
             ch_fastqc_version = FASTQC.out.version
         }
+
+        if ( ch_run_sentieon ) {
+
+            ALIGN_DEDUP_QC_SENTIEON (
+                FastpNoQCWF.out.reads,
+                ch_reference,
+                ch_dummy_file,
+                ch_intervals,
+                ch_dummy_file2,
+                ch_mode,
+                ch_publish_dir,
+                ch_enable_publish,
+                ch_disable_publish
+            )
+
+            ch_nondedup_bam = ALIGN_DEDUP_QC_SENTIEON.out.nondedup_bam
+            ch_dedup_bam = ALIGN_DEDUP_QC_SENTIEON.out.dedup_bam
+            ch_dedup_metrics = ALIGN_DEDUP_QC_SENTIEON.out.dedup_metrics
+            ch_metrics_with_dedup = ALIGN_DEDUP_QC_SENTIEON.out.metrics_with_dedup
+            ch_metrics_with_nondedup = ALIGN_DEDUP_QC_SENTIEON.out.metrics_with_nondedup
+            ch_align_dedup_qc_version = ALIGN_DEDUP_QC_SENTIEON.out.version
+
+        } else {
+
+            ALIGN_DEDUP_QC_STANDARD (
+                FastpNoQCWF.out.reads,
+                ch_reference,
+                ch_dummy_file,
+                ch_intervals,
+                ch_dummy_file2,
+                ch_mode,
+                ch_publish_dir,
+                ch_enable_publish,
+                ch_disable_publish
+            )
+
+            ch_nondedup_bam = ALIGN_DEDUP_QC_STANDARD.out.nondedup_bam
+            ch_dedup_bam = ALIGN_DEDUP_QC_STANDARD.out.dedup_bam
+            ch_dedup_metrics = ALIGN_DEDUP_QC_STANDARD.out.dedup_metrics
+            ch_metrics_with_dedup = ALIGN_DEDUP_QC_STANDARD.out.metrics_with_dedup
+            ch_metrics_with_nondedup = ALIGN_DEDUP_QC_STANDARD.out.metrics_with_nondedup
+            ch_align_dedup_qc_version = ALIGN_DEDUP_QC_STANDARD.out.version
+
+        }
+
+        ch_align_dedup_qc_version.view()
+
         
-        
-        SENTIEON_BWA_WF ( 
-                            FastpNoQCWF.out.reads,
-                            ch_reference,
-                            ch_publish_dir,
-                            ch_disable_publish
-                         )
-        
-        SENTIEON_DRIVER_LOCUSCOLLECTOR_WF ( 
-                                            SENTIEON_BWA_WF.out.bam,
-                                            ch_reference,
-                                            ch_publish_dir,
-                                            ch_disable_publish
-                                      )
-        
-        combine_outputs_a = SENTIEON_BWA_WF.out.bam.join(SENTIEON_DRIVER_LOCUSCOLLECTOR_WF.out.locuscollector_score)
-        
-        SENTIEON_DRIVER_DEDUP_WF ( 
-                                combine_outputs_a,
-                                ch_reference,
-                                ch_publish_dir,
-                                ch_enable_publish
-                              )
-        
-        custom_output = SENTIEON_DRIVER_DEDUP_WF.out.bam.combine( ch_dummy_file )
-        
-        SENTIEON_DRIVER_DEDUP_WF.out.bam
+        ch_dedup_bam
             .collectFile( name: "bam_files.txt", newLine: true, sort: { it[0] }, storeDir: "${ch_tmp_dir}" )
                 { it[0] + "\t" + "${ch_publish_dir}_${ch_timestamp}/secondary_analyses/alignment/output/" + it[1].getName() }
-        
-        SENTIEON_DRIVER_METRICS_WITH_DEDUP_WF ( 
-                                      custom_output,
-                                      ch_reference,
-                                      ch_intervals,
-                                      ch_dummy_file2,
-                                      ch_mode,
-                                      "dedup",
-                                      ch_publish_dir,
-                                      ch_enable_publish
-                                   )
-
-        SENTIEON_DRIVER_METRICS_WITH_NONDEDUP_WF ( 
-                                SENTIEON_BWA_WF.out.bam.combine( ch_dummy_file ),
-                                ch_reference,
-                                ch_intervals,
-                                ch_dummy_file2,
-                                ch_mode,
-                                "nondedup",
-                                ch_publish_dir,
-                                ch_enable_publish
-                            )
         
         ch_bam_lorenz_coverage_stats = Channel.empty()
         ch_bam_lorenz_coverage_version = Channel.empty()
         
         BAM_LORENZ_COVERAGE_WF (
-                                SENTIEON_DRIVER_DEDUP_WF.out.bam,
+                                ch_dedup_bam,
                                 ch_publish_dir,
                                 ch_enable_publish
                             )
@@ -233,7 +230,7 @@ workflow PRESEQ_WF {
         if ( !ch_skip_qualimap ) {            
         
             QUALIMAP_BAMQC_WF ( 
-                                SENTIEON_DRIVER_DEDUP_WF.out.bam,
+                                ch_dedup_bam,
                                 ch_publish_dir,
                                 ch_disable_publish
                               )
@@ -242,29 +239,29 @@ workflow PRESEQ_WF {
         }
         
         PRESEQ_SUBWF ( 
-                            SENTIEON_DRIVER_DEDUP_WF.out.bam,
+                            ch_dedup_bam,
                             "dedup",
                             ch_publish_dir,
                             ch_disable_publish
                          )
-
+                         
         PRESEQ_SUBWF_NONDEDUP ( 
-                            SENTIEON_BWA_WF.out.bam,
+                            ch_nondedup_bam,
                             "non_dedup",
                             ch_publish_dir,
                             ch_disable_publish
                          )
         
-        combine_outputs_b = SENTIEON_DRIVER_DEDUP_WF.out.bam
-                                                    .join(SENTIEON_DRIVER_DEDUP_WF.out.metrics
-                                                    .join(SENTIEON_DRIVER_METRICS_WITH_DEDUP_WF.out.metrics_tuple
-                                                    .join(SENTIEON_DRIVER_METRICS_WITH_NONDEDUP_WF.out.metrics_tuple
-                                                    .join(PRESEQ_SUBWF.out.coverage)
-                                                    .join(PRESEQ_SUBWF_NONDEDUP.out.coverage)
-                                                                                            )
-                                                            )
+        combine_outputs_b = ch_dedup_bam
+                                .join(ch_dedup_metrics
+                                .join(ch_metrics_with_dedup
+                                .join(ch_metrics_with_nondedup
+                                .join(PRESEQ_SUBWF.out.coverage)
+                                .join(PRESEQ_SUBWF_NONDEDUP.out.coverage)
                                                     )
-        // combine_outputs_b.view()
+                                    )
+                                )
+        combine_outputs_b.view()
      
         
         
@@ -274,7 +271,7 @@ workflow PRESEQ_WF {
         ch_bedtools_version = Channel.empty()
         if( !ch_skip_ginkgo && (ch_genome == "GRCh38" || ch_genome == "GRCm39" || ch_genome == "ARSUCD2") ) {
             GINKO_WF(
-                    SENTIEON_DRIVER_DEDUP_WF.out.bam,
+                    ch_dedup_bam,
                     ch_bin_size,
                     ch_binref,
                     ch_gcref,
@@ -307,7 +304,7 @@ workflow PRESEQ_WF {
         if ( !ch_skip_mapd ) {
             
             CUSTOM_CALCULATE_MAPD ( 
-                                        SENTIEON_DRIVER_DEDUP_WF.out.bam,
+                                        ch_dedup_bam,
                                         ch_mapd_bin_size,
                                         ch_blacklist_regions,
                                         ch_reference,
@@ -337,10 +334,7 @@ workflow PRESEQ_WF {
         ch_tool_versions = SEQTK_WF.out.version.take(1).ifEmpty([])
                             .combine(FastpNoQCWF.out.version.take(1))
                             .combine(ch_fastqc_version.take(1).ifEmpty([]))
-                            .combine(SENTIEON_BWA_WF.out.version.take(1))
-                            .combine(SENTIEON_DRIVER_LOCUSCOLLECTOR_WF.out.version.take(1))
-                            .combine(SENTIEON_DRIVER_DEDUP_WF.out.version.take(1))
-                            .combine(SENTIEON_DRIVER_METRICS_WITH_DEDUP_WF.out.version.take(1))
+                            .combine(ch_align_dedup_qc_version)
                             .combine(ch_qualimap_version.take(1).ifEmpty([]) )
                             .combine(PRESEQ_SUBWF.out.preseqBam2mr_version.take(1))
                             .combine(PRESEQ_SUBWF.out.preseqExtrap_version.take(1))
@@ -394,7 +388,7 @@ workflow PRESEQ_WF {
 
 
     emit:
-        dedup_bam = SENTIEON_DRIVER_DEDUP_WF.out.bam
+        dedup_bam = ch_dedup_bam
         multiqc_input = collect_mqc
         // params_meta = params_meta
   
