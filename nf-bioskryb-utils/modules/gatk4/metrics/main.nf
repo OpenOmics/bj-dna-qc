@@ -1,7 +1,7 @@
 nextflow.enable.dsl=2
 params.timestamp = ""
 
-process PICARD_METRICS {
+process GATK4_METRICS {
     tag "${sample_name}"
     publishDir "${params.publish_dir}_${params.timestamp}/secondary_analyses/metrics/${sample_name}/alignment_stats", enabled:"$enable_publish"
 
@@ -26,11 +26,13 @@ process PICARD_METRICS {
     def bqsr = recal_table_file.name == "dummy_file.txt" ? "" : "--bqsr-recal-file ${recal_table_file}"
     if (mode == 'exome') {
         """
+        samtools view -b -L ${wgs_or_target_intervals} ${bam} -o ${sample_name}.${type}.interval.bam
+
         gatk CollectMultipleMetrics \
-            -I ${bam} \
+            -I ${sample_name}.${type}.interval.bam \
             -R ${fasta_ref}/genome.fa \
             -O ${sample_name}.${type} \
-            -L ${wgs_or_target_intervals} \
+            --PROGRAM null \
             --PROGRAM CollectGcBiasMetrics \
             --PROGRAM CollectAlignmentSummaryMetrics \
             --PROGRAM CollectInsertSizeMetrics \
@@ -48,15 +50,17 @@ process PICARD_METRICS {
             -L ${wgs_or_target_intervals} \
             -O ${sample_name}.${type}.cov_metrics
 
+        gatk BedToIntervalList \
+            -I ${wgs_or_target_intervals} \
+            -O ${wgs_or_target_intervals}.interval_list \
+            -SD ${fasta_ref}/genome.fa
+
         #gatk CollectHsMetrics \
         #    -I ${bam} \
         #    -R ${fasta_ref}/genome.fa \
         #    -O ${sample_name}.${type}.hsmetricalgo.metrics.txt \
-        #    --TARGET_INTERVALS ${wgs_or_target_intervals} \
-        #    --BAIT_INTERVALS ${wgs_or_target_intervals}
-
-        # These files are not created in exome. creating dummy files?
-        touch ${sample_name}.wgsmetricsalgo.metrics.txt
+        #    --TARGET_INTERVALS ${wgs_or_target_intervals}.interval_list \
+        #    --BAIT_INTERVALS ${wgs_or_target_intervals}.interval_list
 
         export GATK4_VER=\$(echo \$(gatk --version 2>&1) | sed -e 's/.*(GATK) //; s/Version: //g')
         echo GATK4: \$GATK4_VER > gatk4_version.yml
@@ -66,11 +70,13 @@ process PICARD_METRICS {
         echo "${bqsr}"
         echo "${recal_table_file.name}"
         
+        samtools view -b -L ${base_metrics_intervals} ${bam} -o ${sample_name}.${type}.interval.bam
+
         gatk CollectMultipleMetrics \
-            -I ${bam} \
+            -I ${sample_name}.${type}.interval.bam \
             -R ${fasta_ref}/genome.fa \
             -O ${sample_name}.${type} \
-            --INTERVALS ${base_metrics_intervals} \
+            --PROGRAM null \
             --PROGRAM CollectGcBiasMetrics \
             --PROGRAM CollectAlignmentSummaryMetrics \
             --PROGRAM CollectInsertSizeMetrics \
@@ -90,16 +96,17 @@ process PICARD_METRICS {
             --omit-depth-output-at-each-base \
             --omit-locus-table \
             --omit-per-sample-statistics
+        
+        gatk BedToIntervalList \
+            -I ${wgs_or_target_intervals} \
+            -O ${wgs_or_target_intervals}.interval_list \
+            -SD ${fasta_ref}/genome.fa
 
         gatk CollectWgsMetrics \
             -I ${bam} \
             -R ${fasta_ref}/genome.fa \
             -O ${sample_name}.${type}.wgsmetricsalgo.metrics.txt \
-            --INTERVALS ${wgs_or_target_intervals}
-                
-        # FROM CROMWELL - these files are not created in wgs. creating dummy files?
-        # touch ${sample_name}.${type}.coveragemetrics.metrics.sample_summary
-        touch ${sample_name}.${type}.hsmetricalgo.metrics.txt
+            --INTERVALS ${wgs_or_target_intervals}.interval_list
         
         export GATK4_VER=\$(echo \$(gatk --version 2>&1) | sed -e 's/.*(GATK) //; s/Version: //g')
         echo GATK4: \$GATK4_VER > gatk4_version.yml
@@ -107,16 +114,13 @@ process PICARD_METRICS {
     } else {
         
         """
-        gatk BedToIntervalList \
-            -I ${base_metrics_intervals} \
-            -O ${base_metrics_intervals}.interval_list \
-            -SD ${fasta_ref}/genome.fa
+        samtools view -b -L ${base_metrics_intervals} ${bam} -o ${sample_name}.${type}.interval.bam
 
         gatk CollectMultipleMetrics \
-            -I ${bam} \
+            -I ${sample_name}.${type}.interval.bam \
             -R ${fasta_ref}/genome.fa \
             -O ${sample_name}.${type} \
-            --INTERVALS ${base_metrics_intervals}.interval_list \
+            --PROGRAM null \
             --PROGRAM CollectGcBiasMetrics \
             --PROGRAM CollectAlignmentSummaryMetrics \
             --PROGRAM CollectInsertSizeMetrics \
@@ -136,6 +140,11 @@ process PICARD_METRICS {
             --omit-depth-output-at-each-base \
             --omit-locus-table \
             --omit-per-sample-statistics
+        
+        gatk BedToIntervalList \
+            -I ${base_metrics_intervals} \
+            -O ${base_metrics_intervals}.interval_list \
+            -SD ${fasta_ref}/genome.fa
         
         gatk CollectWgsMetrics \
             -I ${bam} \
@@ -151,7 +160,7 @@ process PICARD_METRICS {
 
 
 
-workflow PICARD_METRICS_WF {
+workflow GATK4_METRICS_WF {
     
     take:
         ch_bam
@@ -164,23 +173,23 @@ workflow PICARD_METRICS_WF {
         ch_enable_publish
         
     main:
-        PICARD_METRICS ( 
-                                  ch_bam,
-                                  ch_reference,
-                                  ch_base_metrics_intervals,
-                                  ch_wgs_or_target_intervals,
-                                  ch_mode,
-                                  ch_type,
-                                  ch_publish_dir,
-                                  ch_enable_publish
-                                )
+        GATK4_METRICS ( 
+            ch_bam,
+            ch_reference,
+            ch_base_metrics_intervals,
+            ch_wgs_or_target_intervals,
+            ch_mode,
+            ch_type,
+            ch_publish_dir,
+            ch_enable_publish
+        )
             
                               
     emit:
-        metrics_tuple = PICARD_METRICS.out.metrics_tuple
-        metrics = PICARD_METRICS.out.metrics
-        alignment_metrics = PICARD_METRICS.out.alignment_metrics
-        version = PICARD_METRICS.out.version
+        metrics_tuple = GATK4_METRICS.out.metrics_tuple
+        metrics = GATK4_METRICS.out.metrics
+        alignment_metrics = GATK4_METRICS.out.alignment_metrics
+        version = GATK4_METRICS.out.version
 }
 
 include { CUSTOM_METRICS_MERGE } from '../../bioskryb/custom_metrics_merge/main.nf'
@@ -203,7 +212,7 @@ workflow {
     ch_bam.view()
     ch_bam.ifEmpty{ exit 1, "ERROR: No BAM files specified either via --bam or --input_csv" }
     
-    PICARD_METRICS_WF( 
+    GATK4_METRICS_WF( 
         ch_bam,
         params.reference,
         params.base_metrics_intervals,
@@ -215,8 +224,8 @@ workflow {
     )
     
     CUSTOM_METRICS_MERGE(
-        PICARD_METRICS_WF.out.metrics.collect(),
+        GATK4_METRICS_WF.out.metrics.collect(),
         params.publish_dir,
         params.enable_publish
-    )  
+    )
 }
