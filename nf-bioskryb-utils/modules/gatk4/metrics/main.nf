@@ -48,7 +48,8 @@ process GATK4_METRICS {
             -I ${bam} \
             -R ${fasta_ref}/genome.fa \
             -L ${wgs_or_target_intervals} \
-            -O ${sample_name}.${type}.cov_metrics
+            -O ${sample_name}.${type}.cov_metrics \
+            --output-format TABLE
 
         gatk BedToIntervalList \
             -I ${wgs_or_target_intervals} \
@@ -95,7 +96,8 @@ process GATK4_METRICS {
             -O ${sample_name}.${type}.cov_metrics \
             --omit-depth-output-at-each-base \
             --omit-locus-table \
-            --omit-per-sample-statistics
+            --omit-per-sample-statistics \
+            --output-format TABLE
         
         gatk BedToIntervalList \
             -I ${wgs_or_target_intervals} \
@@ -139,7 +141,8 @@ process GATK4_METRICS {
             -O ${sample_name}.${type}.cov_metrics \
             --omit-depth-output-at-each-base \
             --omit-locus-table \
-            --omit-per-sample-statistics
+            --omit-per-sample-statistics \
+            --output-format TABLE
         
         gatk BedToIntervalList \
             -I ${base_metrics_intervals} \

@@ -4,6 +4,7 @@ include { PSEUDO_BULK_WF } from './nf-bioskryb-utils/subworkflows/pseudobulk_sc_
 include { SENTIEON_DNASCOPE } from './nf-bioskryb-utils/modules/sentieon/driver/dnascope/main.nf'
 include { BCFTOOLS_ISEC } from './nf-bioskryb-utils/modules/bcftools/filter_isec/main.nf'
 include { SIGPROFILERGENERATEMATRIX_WF } from './nf-bioskryb-utils/modules/sigprofilermatrixgenerator/main.nf'
+include { GOOGLE_DEEPVARIANT_WF } from './nf-bioskryb-utils/subworkflows/google_deepvariant_wf/main.nf'
 include { MULTIQC_WF } from './nf-bioskryb-utils/modules/multiqc/main.nf'
 
 
@@ -188,6 +189,21 @@ workflow {
         }
     } else {
         multiqc_finalInput = PRESEQ_WF.out.multiqc_input
+    }
+
+    // DeepVariant subworkflow to call germline variants
+    if (params.run_deepvariant) {
+        GOOGLE_DEEPVARIANT_WF (
+            PRESEQ_WF.out.dedup_bam,
+            params.deepvariant_model ? file( params.deepvariant_model, checkIfExists: true ) : [],
+            params.population_vcfs   ? file( params.population_vcfs,   checkIfExists: true ) : [],
+            params.reference,
+            params.intervals         ? file( params.intervals,         checkIfExists: true ) : [],
+            params.publish_dir,
+            params.enable_publish
+        )
+
+        //multiqc_finalInput = multiqc_finalInput.combine(ch_deepvariant_version.collect().ifEmpty([]))
     }
 
     params_meta = [
