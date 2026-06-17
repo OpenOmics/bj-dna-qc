@@ -63,6 +63,7 @@ workflow PRESEQ_WF {
         ch_mapd_bin_size
         ch_blacklist_regions
         ch_run_sentieon
+        ch_skip_seqtk
         ch_skip_kraken
         ch_skip_fastqc
         ch_skip_qualimap
@@ -93,6 +94,7 @@ workflow PRESEQ_WF {
                                 ch_publish_dir,
                                 ch_enable_publish
                             )
+
         COUNT_READS_FASTQ_WF.out.read_counts
         .map { sample_id, files, read_count_file -> 
             def read_count = read_count_file.text.trim().toLong()
@@ -104,22 +106,35 @@ workflow PRESEQ_WF {
         }
         .set { branched_reads }
 
-        ch_reads_with_n_reads = branched_reads.large.map { biosampleName, reads, _read_count ->
-            return [ biosampleName, reads, ch_n_reads ]
+        ch_sample_metadata = Channel.empty()
+        ch_seqtk_version = Channel.empty()
+        
+        if ( !ch_skip_seqtk ) {
+
+            ch_reads_with_n_reads = branched_reads.large.map { biosampleName, reads, _read_count ->
+                return [ biosampleName, reads, ch_n_reads ]
+            }
+
+            SEQTK_WF (
+                            ch_reads_with_n_reads,
+                            false,
+                            ch_read_length,
+                            ch_seqtk_sample_seed,
+                            ch_publish_dir,
+                            ch_disable_publish
+                        )
+            ch_sample_reads = SEQTK_WF.out.reads
+            ch_sample_metadata = SEQTK_WF.out.metadata
+            ch_seqtk_version = SEQTK_WF.out.version
+        } 
+        else {
+            ch_sample_reads = branched_reads.large.map { biosampleName, reads, _read_count ->
+                return [ biosampleName, reads ]
+            }
         }
 
-        SEQTK_WF (
-                        ch_reads_with_n_reads,
-                        false,
-                        ch_read_length,
-                        ch_seqtk_sample_seed,
-                        ch_publish_dir,
-                        ch_disable_publish
-                     )
-        ch_sample_metadata = SEQTK_WF.out.metadata
-                     
         FastpNoQCWF ( 
-                SEQTK_WF.out.reads, 
+                ch_sample_reads, 
                 ch_two_color_chemistry,
                 ch_adapter_sequence,
                 ch_adapter_sequence_r2,
@@ -327,7 +342,7 @@ workflow PRESEQ_WF {
                             ch_enable_publish
                         )
 
-        ch_tool_versions = SEQTK_WF.out.version.take(1).ifEmpty([])
+        ch_tool_versions = ch_seqtk_version.take(1).ifEmpty([])
                             .combine(FastpNoQCWF.out.version.take(1))
                             .combine(ch_fastqc_version.take(1).ifEmpty([]))
                             .combine(ch_align_dedup_qc_version.collect())
