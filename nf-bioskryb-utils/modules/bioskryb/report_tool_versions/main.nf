@@ -3,6 +3,8 @@ nextflow.enable.dsl=2
 params.timestamp = ""
 
 process REPORT_VERSIONS{
+    label 'process_low'
+    
     tag "report_versions"
     publishDir "${publish_dir}_${params.timestamp}/execution_info", enabled:"$enable_publish"
     
