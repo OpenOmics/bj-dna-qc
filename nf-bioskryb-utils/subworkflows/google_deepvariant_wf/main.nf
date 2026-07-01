@@ -60,6 +60,7 @@ process DEEPVARIANT_MAKE_EXAMPLES_ONLY {
 
 process DEEPVARIANT_CALL_VARIANTS {
     tag "${sample_name}"
+    label 'gpu'
 
     input:
     tuple val(sample_name), path(example_tfrecords), val(shards)
