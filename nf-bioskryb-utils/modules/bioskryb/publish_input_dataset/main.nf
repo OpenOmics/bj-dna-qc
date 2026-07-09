@@ -1,6 +1,8 @@
 nextflow.enable.dsl=2
 
 process PUBLISH_INPUT_DATASET {
+    label 'process_single'
+    
     tag "publish_input_dataset"
     publishDir "${params.publish_dir}_${params.timestamp}/execution_info", enabled:"$enable_publish"
 

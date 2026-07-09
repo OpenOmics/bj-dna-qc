@@ -89,11 +89,9 @@ process SIGPROFILERGENERATEMATRIX_MATRIX_GENERATOR {
 process CUSTOM_MUTATIONCATALOG_MERGER {
     tag "merge"
     publishDir "${publish_dir}_${params.timestamp}/tertiary_analyses/mutationalcatalogs", enabled:"$enable_publish"
-    publishDir "${report_s3_dir}Mutational_Signature/wid=${workflow.sessionId}/vc=${params.variant_caller}_${params.dnascope_model_selection}/dt=${params.timestamp}/", mode: 'copy', pattern: "merged_mutationalcatalog.parquet", enabled:"$enable_publish"
 
     input:
     path(mutationalcatalogs)
-    val(report_s3_dir)
     val(publish_dir)
     val(enable_publish)
 
@@ -279,7 +277,6 @@ workflow SIGPROFILERGENERATEMATRIX_WF {
         ch_reference
         ch_genome
         ch_sigprofilermatrixgenerator_reference
-        ch_report_s3_dir
         ch_publish_dir
         ch_enable_publish
         ch_disable_publish
@@ -300,8 +297,7 @@ workflow SIGPROFILERGENERATEMATRIX_WF {
                                                         ch_disable_publish
                                                     )
 
-        CUSTOM_MUTATIONCATALOG_MERGER (    SIGPROFILERGENERATEMATRIX_MATRIX_GENERATOR.out.mutationalcatalog.collect(),
-                                                    ch_report_s3_dir,       
+        CUSTOM_MUTATIONCATALOG_MERGER (    SIGPROFILERGENERATEMATRIX_MATRIX_GENERATOR.out.mutationalcatalog.collect(),      
                                                     ch_publish_dir,
                                                     ch_enable_publish
                                                 )
@@ -357,7 +353,6 @@ workflow {
             params.reference,
             params.genome,
             params.sigprofilermatrixgenerator_reference,
-            params.report_s3_dir,
             params.publish_dir,
             params.enable_publish,
             params.disable_publish
