@@ -63,7 +63,7 @@ workflow PRESEQ_WF {
         ch_mapd_bin_size
         ch_blacklist_regions
         ch_run_sentieon
-        ch_skip_seqtk
+        ch_skip_subsampling
         ch_skip_kraken
         ch_skip_fastqc
         ch_skip_qualimap
@@ -109,7 +109,7 @@ workflow PRESEQ_WF {
         ch_sample_metadata = Channel.empty()
         ch_seqtk_version = Channel.empty()
         
-        if ( !ch_skip_seqtk ) {
+        if ( !ch_skip_subsampling ) {
 
             ch_reads_with_n_reads = branched_reads.large.map { biosampleName, reads, _read_count ->
                 return [ biosampleName, reads, ch_n_reads ]

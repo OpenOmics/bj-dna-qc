@@ -2,6 +2,7 @@ include { printHeader ; helpMessage } from './help'
 include { PRESEQ_WF   } from './workflow/preseq.nf'
 include { PSEUDO_BULK_WF } from './nf-bioskryb-utils/subworkflows/pseudobulk_sc_wf/main.nf'
 include { SENTIEON_DNASCOPE } from './nf-bioskryb-utils/modules/sentieon/driver/dnascope/main.nf'
+include { GATK4_HAPLOTYPECALLER } from './nf-bioskryb-utils/modules/gatk4/haplotypecaller/main.nf'
 include { BCFTOOLS_ISEC } from './nf-bioskryb-utils/modules/bcftools/filter_isec/main.nf'
 include { SIGPROFILERGENERATEMATRIX_WF } from './nf-bioskryb-utils/modules/sigprofilermatrixgenerator/main.nf'
 include { GOOGLE_DEEPVARIANT_WF } from './nf-bioskryb-utils/subworkflows/google_deepvariant_wf/main.nf'
@@ -82,7 +83,7 @@ workflow {
             params.mapd_bin_size,
             params.blacklist_regions,
             params.run_sentieon,
-            params.skip_seqtk,
+            params.skip_subsampling,
             params.skip_kraken,
             params.skip_fastqc,
             params.skip_qualimap,
@@ -124,47 +125,65 @@ workflow {
         }
 
         PSEUDO_BULK_WF (
-                            pseudobulk_input,
-                            params.genome,
-                            params.reference,
-                            params.dbsnp,
-                            params.dbsnp_index,
-                            params.mills,
-                            params.mills_index,
-                            params.onekg_omni,
-                            params.onekg_omni_index,
-                            params.publish_dir,
-                            params.enable_publish
-                        )
-
-        SENTIEON_DNASCOPE (
-                            PSEUDO_BULK_WF.out.pseudo_bam,
-                            params.reference,
-                            params.calling_intervals_filename,
-                            params.dbsnp,
-                            params.dbsnp_index,
-                            dnascope_model,
-                            params.pcrfree,
-                            params.ploidy,
-                            "gvcf",
-                            params.publish_dir,
-                            params.enable_publish
-                        )
-
-        ch_vcf = SENTIEON_DNASCOPE.out.vcf.map
-            { sample_name, vcf -> [sample_name, vcf[0], vcf[1]] }
-
+            pseudobulk_input,
+            params.genome,
+            params.reference,
+            params.dbsnp,
+            params.dbsnp_index,
+            params.mills,
+            params.mills_index,
+            params.onekg_omni,
+            params.onekg_omni_index,
+            params.skip_subsampling,
+            params.run_sentieon,
+            params.publish_dir,
+            params.enable_publish
+        )
         
+        if (params.run_sentieon) {
+            SENTIEON_DNASCOPE (
+                PSEUDO_BULK_WF.out.pseudo_bam,
+                params.reference,
+                params.calling_intervals_filename,
+                params.dbsnp,
+                params.dbsnp_index,
+                dnascope_model,
+                params.pcrfree,
+                params.ploidy,
+                "gvcf",
+                params.publish_dir,
+                params.enable_publish
+            )
+
+            ch_vcf = SENTIEON_DNASCOPE.out.vcf.map
+                { sample_name, vcf -> [sample_name, vcf[0], vcf[1]] }
+        
+        } else {
+            GATK4_HAPLOTYPECALLER (
+                PSEUDO_BULK_WF.out.pseudo_bam,
+                params.reference,
+                params.calling_intervals_filename,
+                params.dbsnp,
+                params.dbsnp_index,
+                params.ploidy,
+                params.publish_dir,
+                params.enable_publish
+            )
+
+            ch_vcf = GATK4_HAPLOTYPECALLER.out.vcf.map
+                { sample_name, vcf -> [sample_name, vcf[0], vcf[1]] }
+        }
+
         BCFTOOLS_ISEC (
-                        ch_vcf,
-                        vcfeval_baseline_vcf,
-                        vcfeval_baseline_vcf_index,
-                        params.reference,
-                        params.dbsnp,
-                        params.dbsnp_index,
-                        params.publish_dir,
-                        params.enable_publish
-                    )
+            ch_vcf,
+            vcfeval_baseline_vcf,
+            vcfeval_baseline_vcf_index,
+            params.reference,
+            params.dbsnp,
+            params.dbsnp_index,
+            params.publish_dir,
+            params.enable_publish
+        )
 
         SIGPROFILERGENERATEMATRIX_WF (    
             BCFTOOLS_ISEC.out.filtered_vcf.map { sample_name, vcf -> [sample_name, vcf[0], vcf[1]] },
@@ -172,7 +191,6 @@ workflow {
             params.reference,
             params.genome,
             sigprofilermatrixgenerator_reference,
-            params.report_s3_dir,
             params.publish_dir,
             params.enable_publish,
             params.disable_publish
