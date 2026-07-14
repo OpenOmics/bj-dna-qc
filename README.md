@@ -10,16 +10,18 @@ The BJ-DNA-QC pipeline uses low-pass sequencing data and generates several QC me
 # Pipeline Overview
 Following are the steps and tools that pipeline uses to perform the analyses:
 
-- Subsample the reads to 2 million using SEQTK SAMPLE to compare metrics across samples
+- Subsample the reads to 2 million using SEQTK SAMPLE to compare metrics across samples. Bypass with `--skip_subsampling` to use all reads instead
 - Evaluate sequencing quality control using FASTP and trim/clip reads
-- Map reads to reference genome using SENTIEON BWA MEM
-- Remove duplicate reads using SENTIEON DRIVER LOCUSCOLLECTOR and SENTIEON DRIVER DEDUP
-- Evaluate metrics using SENTIEON DRIVER METRICS which includes Alignment, GC Bias, Insert Size, and Coverage metrics
+- *Map reads to reference genome using BWA MEM
+- *Remove duplicate reads using PICARD MARKDUPLICATES
+- *Evaluate metrics using PICARD METRICS which includes Alignment, GC Bias, Insert Size, and Coverage metrics
 - Evaluate the BAM quality control using QUALIMAP BAMQC
 - Evaluate the library complexity using PRESEQ BAM2MR and PRESEQ GC EXTRAP
 - Evaluate the CNV using a custom Ginkgo impelmentation
 - Evaluate taxonomic classification with Kraken
 - Aggregate the metrics across biosamples and tools to create overall pipeline statistics summary using MULTIQC
+
+*BWA and PICARD run by default. SENTIEON optimized equivalents can be enabled for these steps by passing `--run_sentieon`: SENTIEON BWA MEM, LOCUSCOLLECTOR, DEDUP, and DRIVER METRICS
 
 # Running Locally
 
@@ -70,6 +72,13 @@ sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin 
 
 ```
 
+## Download pipeline
+```
+git clone https://github.com/OpenOmics/bj-dna-qc.git
+cd bj-dna-qc
+
+```
+
 ## Sentieon License Setup
 
 The Sentieon license is a "localhost" license that starts a lightweight license server on the localhost. This type of license is very easy to use and get started with. However, because it can be used anywhere, we restrict this license to short-term testing/evaluation only. To use this type of license, you need to set the environment variable SENTIEON_LICENSE to point to the license file on the compute nodes:
@@ -86,27 +95,29 @@ For running the pipeline, a typical dataset (less than 8 million reads) requires
 --max_cpus 4 --max_memory 14.GB
 ```
 
-## Test Pipeline Execution
+<br>
+
+# Pipeline Execution
 
 All pipeline resources are publically available at `s3://bioskryb-public-data/pipeline_resources` users need not have to download this, and will be downloaded during nextflow run.
 
-**Command**
+**Run Command**
 
-example-
-
-** csv input **
+** Example using test data input **
 
 ```
-git clone https://github.com/BioSkryb/bj-dna-qc.git
-cd bj-dna-qc
-nextflow run main.nf --input_csv $PWD/tests/data/inputs/input.csv --max_cpus 4 --max_memory 14.GB --publish_dir test
+nextflow run main.nf \
+    --input_csv $PWD/tests/data/inputs/input.csv \
+    --publish_dir test \
+    --max_cpus 4 \
+    --max_memory 14.GB
 ```
 
 **Input Options**
 
-The input for the pipeline can be passed via a input.csv with a meta data.
+The input for the pipeline can be passed via a samplesheet CSV.
 
-- **CSV Metadata Input**: The CSV file should have 3 columns: `biosampleName`, `read1` and `read2`. 
+- **CSV Metadata Input**: The CSV file should have 3 columns: `biosampleName`, `read1` and `read2`.
 The `biosampleName` column contains the name of the biosample, `read1` and `read2` has the path to the input reads. For example:
 
 ```
@@ -115,46 +126,50 @@ DNAQC-test1-100reads,s3://bioskryb-public-data/pipeline_resources/dev-resources/
 DNAQC-test2-1000reads,s3://bioskryb-public-data/pipeline_resources/dev-resources/local_test_files/DNAQC-test2-1000reads_S2_L001_R1_001.fastq.gz,s3://bioskryb-public-data/pipeline_resources/dev-resources/local_test_files/DNAQC-test2-1000reads_S2_L001_R2_001.fastq.gz
 ```
 
-**Optional Groups Column**: The CSV file can include an optional `groups` column containing sample group information. This column is mandatory when using the QC_Plot and Mutational Signature profile modules.
+- **Optional Groups Column**: The CSV file can include an optional `groups` column containing sample group information. This column is mandatory when using the QC_Plot and Mutational Signature profile modules.
 
-**Optional Modules**
+**Optional Skip Modules**
 
 This pipeline includes several optional modules. You can choose to include or exclude these modules by adjusting the following parameters:
 
-- `--skip_kraken`: Set this to `true` to exclude the KRAKEN2 module. By default, it is set to `true`.
-- `--skip_qualimap`: Set this to `true` to exclude the Qualimap module. By default, it is set to `true`.
-- `--skip_fastqc`: Set this to `true` to exclude the fastqc module. By default, it is set to `true`.
-- `--skip_ginkgo`: Set this to `true` to exclude the CNV - ginkgo module. By default, it is set to `true`.
-        **Note**: When the Ginkgo module is enabled, the QC_Plot module will also be automatically executed.
-- `--skip_mapd`: Set this to `true` to exclude the MAPD module. By default, it is set to `false`.
-- `--skip_sigprofile` : Set this to `false` to include the Mutational Signature profile module. By default, it is set to `true`.
+- `--skip_subsampling`: Set to `true` to skip subsampling of input reads. Default: `false`
+- `--skip_kraken` : Set to `true` to exclude the KRAKEN2 module. Default: `true`
+- `--skip_fastqc` : Set to `true` to exclude the FastQC module. Default: `true`
+- `--skip_qualimap` : Set to `true` to exclude the Qualimap module. Default: `true`
+- `--skip_ginkgo`: Set to `true` to exclude the CNV Ginkgo module. Default: `true`. **Note**: When the Ginkgo module is enabled, the QC_Plot module will also be automatically executed.
+- `--skip_mapd`: Set to `true` to exclude the MAPD module. Default: `false`
+- `--skip_sigprofile` : Set to `false` to include the Mutational Signature profile module. Default: `true`.
         The mutational signature runs require additional metadata in the input.csv file under the "groups" column. Add the group name for samples that need to be combined by the pseudobulk process for mutational signature profiling. This field can be left blank for other samples.
+
 
 **Outputs**
 
 The pipeline saves its output files in the designated "publish_dir" directory. The different QC metrics files are stored in the "secondary_analyses/metrics/<sample_name>/" subdirectory. For details: [BJ-DNA-QC outputs](https://docs.basejumper.bioskryb.com/pipelines/secondary/bj-dna-qc/1.9.1/docs/#output-directories)
 
-**command options**
-
+**Command Options**
 ```
     Usage:
-        nextflow run main.nf [options]
+        nextflow run main.nf --input_csv <input.csv> --publish_dir <output_dir> [options]
 
     Script Options: see nextflow.config
 
-        [required]
-        --input_csv         FILE    Path to input csv file
+        [Required Arguments]
+        --------------------
+
+        --input_csv         FILE    Path to input CSV samplesheet.
 
         --genome            STR     Reference genome to use. Available options - GRCh38, GRCm39
                                     DEFAULT: GRCh38
 
-        [optional]
-        
-        --genomes_base      STR     Path to the genomes
-                                    DEFAULT: s3://bioskryb-shared-data
+        --publish_dir       DIR     Path to run output directory. If the provided output directory does not exist, it will be created automatically.
 
-        --publish_dir       DIR     Path to run output directory
-                                    DEFAULT: 
+        
+
+        [Optional Arguments]
+        --------------------
+        
+        --genomes_base      STR     Path to the genomes directory
+                                    DEFAULT: /data/OpenOmics/references/bioskryb
                                     
         --timestamp         STR     User can specify timestamp otherwise uses runtime generated timestamp 
 
@@ -162,44 +177,80 @@ The pipeline saves its output files in the designated "publish_dir" directory. T
                                     DEFAULT: 2000000
 
         --read_length       VAL     Desired read length for analysis and excess to be trimmed
-                                    DEFAULT: 75
+                                    DEFAULT: 50
 
-        --min_reads       VAL       Minimum number of reads required for analysis. Samples with fewer reads will be flagged.
+        --min_reads         VAL     Minimum number of reads required for analysis. Samples with fewer reads will be flagged.
                                     DEFAULT: 1000
 
-        --email_on_fail     STR     Email to receive upon failure
-                                    DEFAULT: 
-                                    
-        --skip_kraken       STR     Skip KRAKEN2 module
-                                    DEFAULT: true
-                                    
-        --skip_qualimap     STR     Skip Qualimap module
-                                    DEFAULT: true
-                                    
-        --skip_mapd         STR     Skip MAPD module. MAPD is a measurement of the bin-to-bin variation in read coverage that is robust to the presence of CNVs, and is an indicator of the evenness of whole genome amplification (WGA)
+        --run_sentieon      BOOL    Will default to all Sentieon modules if set to true, including BWA, Deduplication, Driver Metrics, and DNAscope
                                     DEFAULT: false
         
-        --skip_fastqc       STR     Skip fastqc module
-                                    DEFAULT: true
+        --run_deepvariant   BOOL    Run Google DeepVariant to call germline variants
+                                    DEFAULT: false
+
+
+        [Optional Skip Modules]: Set to `true` to enable skip and `false` to disable skip
+
+        --skip_subsampling  BOOL    Skip subsampling of input reads
+                                    DEFAULT: false
                                     
-        --skip_ginkgo       STR     Skip CNV - ginkgo and QC_plot modules
+        --skip_kraken       BOOL    Skip KRAKEN2 module
                                     DEFAULT: true
 
-        --skip_sigprofile   STR     Skip Mutational Signature
+        --skip_fastqc       BOOL    Skip FastQC module
+                                    DEFAULT: true
+                                    
+        --skip_qualimap     BOOL    Skip Qualimap module
+                                    DEFAULT: true
+
+        --skip_ginkgo       BOOL    Skip CNV Ginkgo and QC_plot modules
+                                    DEFAULT: true
+                                    
+        --skip_mapd         BOOL    Skip MAPD module. MAPD is a measurement of the bin-to-bin variation in read coverage that is robust to the presence of CNVs, and is an indicator of the evenness of whole genome amplification (WGA)
                                     DEFAULT: false
+
+        --skip_sigprofile   BOOL    Skip Mutational Signature Profiling
+                                    DEFAULT: true
+        
+        --email_on_fail     STR     Email to receive upon failure
                                     
         --help              BOOL    Display help message
 ```
+
+**Example Usage on Low-pass Data**
+```
+nextflow run main.nf \
+    --input_csv $PWD/tests/data/inputs/input.csv \
+    --publish_dir test \
+    --skip_kraken false \
+    --skip_fastqc false \
+    --skip_ginkgo false
+```
+
+**Example Usage on High-pass Data**
+```
+nextflow run main.nf \
+    --input_csv $PWD/tests/data/inputs/input.csv \
+    --publish_dir test \
+    --skip_subsampling \
+    --skip_kraken false \
+    --skip_fastqc false \
+    --skip_ginkgo false \
+    --run_deepvariant
+```
+
 **Tool versions**
 
 - `Seqtk: 1.3-r106`
 - `fastp: 0.20.1`
+- `Kraken2: 2.1.3`
 - `FastQC: v0.11.9`
 - `Sentieon: 202308.01`
+- `BWA: v0.7.17-r1188`
+- `Picard: 3.4.0`
+- `bam-lorenz-coverage: 2.3.0 GNU`
 - `QualiMap: v.2.2.2-dev`
 - `Preseq: 2.0.3`
-- `Kraken2: 2.1.3`
-- `bam-lorenz-coverage: 2.3.0 GNU`
 - `Ginkgo: 0.0.2`
 - `bedtools: v2.28.0`
 
