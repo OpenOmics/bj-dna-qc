@@ -51,7 +51,6 @@ process COMBINE_READ_COUNTS {
 }
 
 process COUNT_READS_FASTQ {
-    label 'process_single'
     
     tag "${sample_name}"
     publishDir "${publish_dir}_${params.timestamp}/read_counts", enabled:"$enable_publish"
